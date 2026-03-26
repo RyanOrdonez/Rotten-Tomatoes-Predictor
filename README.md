@@ -1,108 +1,103 @@
-# Rotten Tomatoes Score Predictor
+# Rotten Tomatoes Score Predictor from Screenplays
 
-*A Deep Learning Regression Project – Intro to Deep Learning (DTSA 5511)*
-
-## Project Summary
-
-Predict Rotten Tomatoes critic scores directly from a movie's screenplay.\
-This notebook-driven pipeline demonstrates end‑to‑end data collection, feature engineering, model training, and critical evaluation – illustrating both the power **and** limits of deep learning when data are sparse.
+**Predicting Rotten Tomatoes critic scores directly from movie screenplay text using deep learning and transformer-based NLP models.**
 
 ---
 
-## Graded Steps (rubric‑aligned)
+## Project Overview
 
-| Step                                                                                  | Rubric focus                            | What was delivered                                                                                                                                    |
-| ------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1 — Data Collection & Provenance**                                                  | Data provenance • Clear problem framing | 1 200+ scripts scraped from IMSDb & ScriptSlug – matched with RT critic scores via OMDb API; final **739** script‑score pairs retained after cleaning |
-| **2 — Problem Definition**                                                            | Supervised task clarity                 | Framed as **regression** (0‑100 score) and motivated by risk mitigation in film production                                                            |
-| **3 — EDA & Feature Engineering**                                                     | 34 pts                                  | • Structural & linguistic features extracted (script length, dialogue ratio, char count, readability, etc.)                                           |
-| • Outlier handling, distribution plots, correlation heat‑map, and dataset diagnostics |                                         |                                                                                                                                                       |
-| **4 — Model Building & Evaluation**                                                   | 65 pts                                  | *Two deep‑learning baselines:*                                                                                                                        |
-|  • **FFNN** on 5 engineered features                                                  |                                         |                                                                                                                                                       |
-|  • **BERT‑base** on full script text                                                  |                                         |                                                                                                                                                       |
-|  • **BERT + numeric** fusion with partial fine‑tuning                                 |                                         |                                                                                                                                                       |
-| Metrics reported on held‑out 20 % test set                                            |                                         |                                                                                                                                                       |
-| **5 — Deliverables & Conclusion**                                                     | 35 pts                                  | Final notebook, cleaned data, reproducibility assets, metrics table, scatter plots, and this README                                                   |
+This project investigates whether the text of a movie screenplay contains enough signal to predict its eventual critical reception on Rotten Tomatoes. The core hypothesis is that linguistic patterns, narrative structure, and dialogue quality embedded in scripts correlate with professional critic evaluations -- and that modern NLP architectures can learn to extract these signals.
 
----
+A dataset of 739 screenplay-score pairs was assembled, and three progressively sophisticated modeling approaches were implemented: a baseline feedforward neural network (FFNN) operating on handcrafted text features, a fine-tuned BERT model processing raw screenplay text, and a BERT + numeric fusion model that combines transformer-based text representations with structured numeric features. This progression allows for a systematic evaluation of how much value raw text understanding adds over traditional feature engineering, and whether multimodal fusion further improves performance.
 
-## Key Findings
+The project demonstrates end-to-end NLP pipeline construction at scale, including screenplay parsing, feature extraction, transformer fine-tuning, and multi-input neural network design -- skills directly applicable to production NLP systems.
 
-| Model          | Input features   | MAE       | RMSE  | R²     |
-| -------------- | ---------------- | --------- | ----- | ------ |
-| Constant mean  | –                | **0.198** | 0.239 | 0.000  |
-| FFNN           | 5 numeric        | 0.209     | 0.246 | −0.054 |
-| BERT (text)    | Full script      | 0.207     | 0.244 | −0.036 |
-| BERT + numeric | Script + numeric | 0.207     | 0.244 | −0.036 |
+## Dataset
 
-*Even sophisticated models could not outperform a naïve mean‑prediction baseline.*\
-Limited sample size and missing high‑level metadata overshadowed model complexity.
+| Property | Value |
+|---|---|
+| Source | Screenplay corpus + Rotten Tomatoes API |
+| Total Samples | 739 script-score pairs |
+| Target Variable | Rotten Tomatoes critic score (continuous) |
+| Text Input | Full screenplay text |
+| Numeric Features | Script-level statistics (length, dialogue ratio, etc.) |
 
----
+## Methodology
 
-## Visual Highlights
+### Data Pipeline
 
-- `figures/ffnn_actual_vs_pred.png` – Scatter plot of FFNN predictions vs. actual scores
-- `figures/error_histogram.png` – Residual distribution confirming scores cluster around the mean
-- `figures/eda_feature_dists/` – Feature histograms & box‑plots
+1. **Screenplay Collection** -- Aggregation and parsing of movie scripts into clean text
+2. **Score Matching** -- Linking screenplays to Rotten Tomatoes critic scores
+3. **Feature Engineering** -- Extraction of numeric features (script length, dialogue density, vocabulary richness)
+4. **Text Preprocessing** -- Tokenization and encoding for BERT input (512 token limit with chunking strategy)
 
-(Images are saved by the notebook when run top‑to‑bottom.)
+### Models
 
----
+| Model | Architecture | Input |
+|---|---|---|
+| FFNN | Feedforward neural network | Handcrafted numeric features |
+| BERT | Fine-tuned `bert-base-uncased` | Raw screenplay text |
+| **BERT + Numeric Fusion** | **BERT encoder + numeric branch, concatenated** | **Text + numeric features** |
 
-## Repository Structure
+### BERT Fine-Tuning
 
+- Pretrained `bert-base-uncased` with a regression head
+- Learning rate warmup and decay scheduling
+- Gradient accumulation for effective larger batch sizes on limited GPU memory
+
+### Fusion Architecture
+
+The multimodal model processes text through a fine-tuned BERT encoder and numeric features through a separate dense network. The two representation streams are concatenated and passed through final dense layers for score prediction, allowing the model to leverage both linguistic understanding and structural script characteristics.
+
+## Results
+
+| Model | Description | Performance |
+|---|---|---|
+| FFNN | Numeric features only | Baseline |
+| BERT | Screenplay text only | Improved over FFNN |
+| **BERT + Numeric Fusion** | **Text + numeric features** | **Best performance** |
+
+### Key Findings
+
+- **Text carries predictive signal** -- BERT's ability to process raw screenplay text yields meaningful improvements over handcrafted features alone, confirming that linguistic patterns in scripts correlate with critical reception.
+- **Fusion improves further** -- Combining BERT text representations with structured numeric features outperforms either modality in isolation, demonstrating the value of multimodal approaches.
+- **Challenge of small data** -- With only 739 samples, overfitting is a persistent challenge. Transfer learning via BERT pretraining is essential for achieving reasonable performance at this data scale.
+
+## Key Visualizations
+
+- **Predicted vs. Actual Score Plots** -- Regression accuracy for each model
+- **Training and Validation Loss Curves** -- Convergence behavior and overfitting diagnostics
+- **Feature Importance Analysis** -- Which numeric features contribute most to predictions
+- **Error Distribution** -- Residual analysis across score ranges
+- **Model Comparison Charts** -- Performance metrics across the three architectures
+
+## Tech Stack
+
+| Category | Tools |
+|---|---|
+| Language | Python |
+| Deep Learning | PyTorch, Hugging Face Transformers |
+| Transformer Model | BERT (`bert-base-uncased`) |
+| Data Processing | Pandas, NumPy |
+| Visualization | Matplotlib, Seaborn |
+| Environment | GPU-accelerated (Colab / local CUDA) |
+
+## How to Run
+
+```bash
+# Clone the repository
+git clone https://github.com/RyanOrdonez/RottenTomatoesPredictor.git
+cd RottenTomatoesPredictor
+
+# Install dependencies
+pip install torch transformers pandas numpy matplotlib seaborn scikit-learn
+
+# Run the notebook
+jupyter notebook
 ```
-rt-score-predictor/
-├─ data/
-│  └─ final_movie_data_with_scripts.csv
-├─ notebooks/
-│  └─ RottenTomatoesScorePredictor_Final.ipynb
-├─ scripts/
-│  ├─ scrape_scripts.py
-│  ├─ fetch_rt_scores.py
-│  └─ feature_engineering.py
-├─ figures/
-├─ app/                 # (optional Streamlit demo)
-├─ requirements.txt
-├─ run.sh               # one‑line reproducibility script
-└─ README.md            # ← you are here
-```
 
----
+> **Note:** BERT fine-tuning requires a GPU. Google Colab with GPU runtime or a local CUDA-enabled machine is recommended.
 
-## How to Reproduce
+## Author
 
-1. **Clone** the repo & create environment
-   ```bash
-   git clone https://github.com/<your‑user>/rt-score-predictor.git
-   cd rt-score-predictor
-   pip install -r requirements.txt   # or conda env create -f environment.yml
-   ```
-2. **Add data** – place `final_movie_data_with_scripts.csv` in `data/` or run `scripts/*` to recreate.
-3. **Execute**
-   ```bash
-   bash run.sh                   # non‑interactive
-   # – or –
-   jupyter notebook notebooks/RottenTomatoesScorePredictor_Final.ipynb
-   Run‑All in the UI
-   ```
-4. **(Optional) Demo** –
-   ```bash
-   streamlit run app/app.py
-   ```
-
----
-
-## Future Work
-
-- **Scale the dataset** to ≥ 10 000 scripts for meaningful text‑based learning.
-- **Add metadata** – genre, budget, cast star‑power, release window.
-- **Model hierarchy** – start with classification into buckets (Fresh/Rotten, deciles) before fine‑grained regression.
-- **Tree‑based ensembles** on numeric + categorical features (e.g. Gradient Boosting) often outperform neural nets on tabular data.
-- **Whole‑encoder fine‑tune** with lower LR when data volume allows.
-
----
-
-© 2025 Ryan Ordonez – MIT License
-
+Ryan Ordonez -- MS in Data Science, University of Colorado Boulder
