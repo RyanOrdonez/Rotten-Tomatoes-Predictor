@@ -51,17 +51,27 @@ The multimodal model processes text through a fine-tuned BERT encoder and numeri
 
 ## Results
 
-| Model | Description | Performance |
-|---|---|---|
-| FFNN | Numeric features only | Baseline |
-| BERT | Screenplay text only | Improved over FFNN |
-| **BERT + Numeric Fusion** | **Text + numeric features** | **Best performance** |
+*All scores are normalized to 0–1 (i.e., RT score / 100). Lower MAE/RMSE is better; higher R² is better.*
+
+| Model | Input | MAE | RMSE | R² |
+|---|---|---|---|---|
+| Constant-mean baseline | — | 0.198 | 0.239 | 0.000 |
+| FFNN | 5 engineered numeric features | 0.209 | 0.246 | −0.054 |
+| BERT (text only) | Full screenplay text | 0.207 | 0.244 | −0.036 |
+| **BERT + Numeric Fusion** | **Text + 5 numeric features** | **0.207** | **0.244** | **−0.036** |
 
 ### Key Findings
 
-- **Text carries predictive signal** -- BERT's ability to process raw screenplay text yields meaningful improvements over handcrafted features alone, confirming that linguistic patterns in scripts correlate with critical reception.
-- **Fusion improves further** -- Combining BERT text representations with structured numeric features outperforms either modality in isolation, demonstrating the value of multimodal approaches.
-- **Challenge of small data** -- With only 739 samples, overfitting is a persistent challenge. Transfer learning via BERT pretraining is essential for achieving reasonable performance at this data scale.
+- **Negative result is an honest result** -- None of the models outperformed a constant-mean baseline on 739 samples. This illustrates a critical principle: model sophistication cannot compensate for insufficient or weakly-informative data.
+- **Text carries marginal signal** -- BERT slightly outperformed the FFNN, confirming that linguistic patterns in scripts do correlate with critical reception, but the effect is small at this data scale.
+- **Fusion provided no additional lift** -- Combining BERT embeddings with numeric features matched but did not improve over BERT alone, suggesting the numeric features are redundant given the text.
+- **Challenge of small data** -- With only 739 samples, overfitting is a persistent challenge. Transfer learning via BERT pretraining is essential for achieving even baseline-level performance.
+
+### What I Learned
+
+- End-to-end NLP pipeline construction: scraping, parsing, feature engineering, transformer fine-tuning, and multi-input architecture design.
+- Honest evaluation matters more than inflated claims — reporting a negative result builds more credibility than cherry-picking metrics.
+- Future work: expand to 10k+ scripts, add metadata features (genre, budget, cast), and explore gradient-boosted tree ensembles before returning to deep learning.
 
 ## Key Visualizations
 
@@ -86,8 +96,8 @@ The multimodal model processes text through a fine-tuned BERT encoder and numeri
 
 ```bash
 # Clone the repository
-git clone https://github.com/RyanOrdonez/RottenTomatoesPredictor.git
-cd RottenTomatoesPredictor
+git clone https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor.git
+cd Rotten-Tomatoes-Predictor
 
 # Install dependencies
 pip install torch transformers pandas numpy matplotlib seaborn scikit-learn
