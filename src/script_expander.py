@@ -7,24 +7,39 @@ import anthropic
 
 VIBE_CATEGORIES = {
     "😂 Laughs": {
-        "low": "Waiting for your Hot Pocket to heat up",
-        "high": "Laughing so hard you shart a little",
+        0: "Waiting for your Hot Pocket in the microwave",
+        25: "A light chuckle at best",
+        50: "Solid comedy — you'll laugh out loud a few times",
+        75: "Tears-from-laughing funny",
+        100: "Laughing so hard you shart a little",
     },
     "😢 Tears": {
-        "low": "Bone dry, not a tear in sight",
-        "high": "Ugly crying in public",
+        0: "Bone dry, not a tear in sight",
+        25: "A tiny lump in your throat",
+        50: "You'll get misty-eyed at least once",
+        75: "Openly weeping, no shame",
+        100: "Ugly crying in public",
     },
     "💓 Romance": {
-        "low": "Awkward handshake",
-        "high": "Steamy enough to fog your screen",
+        0: "Awkward handshake energy",
+        25: "A shy glance across the room",
+        50: "Butterflies in your stomach",
+        75: "Full rom-com swoon",
+        100: "Steamy enough to fog your screen",
     },
     "😱 Scares": {
-        "low": "Night light off, no big deal",
-        "high": "Sleeping with every light on for a week",
+        0: "Night light off, no big deal",
+        25: "A couple of jump scares",
+        50: "Checking behind the shower curtain",
+        75: "Watching through your fingers",
+        100: "Sleeping with every light on for a week",
     },
     "🔥 Thrills": {
-        "low": "Sunday afternoon nap",
-        "high": "White-knuckle grip on your seat",
+        0: "Sunday afternoon nap",
+        25: "Mildly interesting, like a crossword",
+        50: "Leaning forward in your seat",
+        75: "Heart pounding, can't look away",
+        100: "White-knuckle grip, forgot to breathe",
     },
 }
 
@@ -162,10 +177,18 @@ def rate_vibes(synopsis: str, api_key: str | None = None) -> dict[str, int]:
         model="claude-sonnet-4-20250514",
         max_tokens=256,
         system=(
-            "You are a movie vibe analyst. Rate the following movie synopsis on each category "
-            "from 0 to 100. Respond ONLY with a JSON object mapping category name to integer score.\n\n"
+            "You are a movie vibe analyst. Carefully read the synopsis and rate it on each "
+            "emotional category from 0 to 100.\n\n"
+            "BE EXTREME AND HONEST. Use the FULL range:\n"
+            "- A pure horror film with zero comedy should get 😂 Laughs: 2-10\n"
+            "- A slapstick comedy should get 😂 Laughs: 85-95\n"
+            "- A gritty action thriller with no romance should get 💓 Romance: 0-10\n"
+            "- A tearjerker drama should get 😢 Tears: 80-95\n"
+            "- A lighthearted kids movie should get 😱 Scares: 0-5\n\n"
+            "Do NOT cluster scores around 40-60. Differentiate sharply based on the actual content.\n\n"
             f"Categories: {categories_str}\n\n"
-            'Example response: {{"😂 Laughs": 75, "😢 Tears": 20, ...}}'
+            "Respond ONLY with a JSON object. Example:\n"
+            '{{"😂 Laughs": 8, "😢 Tears": 85, "💓 Romance": 45, "😱 Scares": 3, "🔥 Thrills": 30}}'
         ),
         messages=[
             {"role": "user", "content": synopsis}
