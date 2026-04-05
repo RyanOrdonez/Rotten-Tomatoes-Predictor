@@ -38,6 +38,10 @@ def predict_score(features: dict) -> float:
 
     X = np.array([[features[col] for col in FEATURE_ORDER]])
     X_scaled = scaler.transform(X)
+    # Clip to training distribution range — AI-generated screenplays are much
+    # shorter than the real scripts the model trained on, which pushes features
+    # (especially script_length) far out of distribution and biases predictions low.
+    X_scaled = np.clip(X_scaled, -2, 2)
     prediction = float(model.predict(X_scaled)[0])
 
     return max(0.0, min(100.0, prediction))
