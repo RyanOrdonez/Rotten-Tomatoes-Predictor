@@ -35,9 +35,12 @@ st.markdown(
 # ---------------------------------------------------------------------------
 RATE_LIMIT_DIR = Path("/tmp/rt_predictor_rate_limits")
 BUDGET_FILE = RATE_LIMIT_DIR / "_monthly_budget.json"
+GLOBAL_THROTTLE_FILE = RATE_LIMIT_DIR / "_global_throttle.json"
 MAX_AI_PREDICTIONS_PER_DAY = 3
+MAX_GLOBAL_PREDICTIONS_PER_DAY = 50  # Hard cap across ALL users
 MONTHLY_BUDGET_USD = 5.00
 EST_COST_PER_PREDICTION = 0.05
+MAX_INPUT_CHARS = 2000  # Limit user input length
 
 
 def _get_user_ip() -> str:
@@ -79,6 +82,36 @@ def _record_spend(cost: float):
     data = _load_budget()
     data["spent"] = data.get("spent", 0.0) + cost
     BUDGET_FILE.write_text(json.dumps(data))
+
+
+def _check_global_throttle() -> bool:
+    """Hard cap on total predictions per day across ALL users."""
+    RATE_LIMIT_DIR.mkdir(parents=True, exist_ok=True)
+    today = time.strftime("%Y-%m-%d")
+    data = {"date": today, "count": 0}
+    if GLOBAL_THROTTLE_FILE.exists():
+        try:
+            data = json.loads(GLOBAL_THROTTLE_FILE.read_text())
+        except Exception:
+            pass
+    if data.get("date") != today:
+        data = {"date": today, "count": 0}
+    return data["count"] < MAX_GLOBAL_PREDICTIONS_PER_DAY
+
+
+def _increment_global_throttle():
+    RATE_LIMIT_DIR.mkdir(parents=True, exist_ok=True)
+    today = time.strftime("%Y-%m-%d")
+    data = {"date": today, "count": 0}
+    if GLOBAL_THROTTLE_FILE.exists():
+        try:
+            data = json.loads(GLOBAL_THROTTLE_FILE.read_text())
+        except Exception:
+            pass
+    if data.get("date") != today:
+        data = {"date": today, "count": 0}
+    data["count"] += 1
+    GLOBAL_THROTTLE_FILE.write_text(json.dumps(data))
 
 
 def _check_rate_limit() -> bool:
@@ -229,6 +262,7 @@ if st.session_state.get("clear_text"):
 user_text = st.text_area(
     "Describe your movie idea",
     height=150,
+    max_chars=MAX_INPUT_CHARS,
     placeholder=(
         "e.g., A prequel to Indiana Jones where he is a teenage boy "
         "following in his father's footsteps to find lost treasures. "
@@ -254,6 +288,10 @@ if generate_clicked:
         st.error("Please enter a movie idea first.")
         st.stop()
 
+    if len(user_text) > MAX_INPUT_CHARS:
+        st.error(f"Please keep your idea under {MAX_INPUT_CHARS:,} characters.")
+        st.stop()
+
     api_key = _get_api_key()
     if not api_key:
         st.error("AI is not configured. The app owner needs to set the ANTHROPIC_API_KEY.")
@@ -261,6 +299,10 @@ if generate_clicked:
 
     if not _check_budget():
         st.error("The monthly AI budget has been reached. Please check back next month!")
+        st.stop()
+
+    if not _check_global_throttle():
+        st.error("The app has reached its daily limit. Please try again tomorrow!")
         st.stop()
 
     if not _check_rate_limit():
@@ -329,6 +371,7 @@ if generate_clicked:
     status_text.empty()
 
     _increment_usage()
+    _increment_global_throttle()
     _record_spend(EST_COST_PER_PREDICTION)
 
     st.rerun()
