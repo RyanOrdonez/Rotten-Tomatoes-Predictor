@@ -255,25 +255,32 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # Phase 1: Generate synopsis (0% → 45%)
+    # Generate synopsis AND screenplay in parallel
     from src.script_expander import expand_plot_to_synopsis, expand_plot_to_screenplay
 
-    thread, result = _run_in_thread(expand_plot_to_synopsis, user_text, api_key)
-    _animate_progress(progress_bar, status_text, thread, 0.0, 0.45, "🎬 Generating your movie synopsis...")
-    thread.join()
+    thread1, result1 = _run_in_thread(expand_plot_to_synopsis, user_text, api_key)
+    thread2, result2 = _run_in_thread(expand_plot_to_screenplay, user_text, api_key)
 
-    if result["error"]:
+    # Animate progress while both threads run
+    status_text.text("🎬 Generating synopsis and analyzing structure...")
+    current = 0.0
+    step = 0.02
+    while thread1.is_alive() or thread2.is_alive():
+        if current < 0.88:
+            current += step
+            if current > 0.5:
+                step = 0.005
+            progress_bar.progress(min(current, 0.89))
+        time.sleep(0.3)
+
+    thread1.join()
+    thread2.join()
+
+    if result1["error"]:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"Synopsis generation failed: {result['error']}")
+        st.error(f"Synopsis generation failed: {result1['error']}")
         st.stop()
-
-    st.session_state.synopsis = result["value"]
-
-    # Phase 2: Generate screenplay for scoring (45% → 90%)
-    thread2, result2 = _run_in_thread(expand_plot_to_screenplay, user_text, api_key)
-    _animate_progress(progress_bar, status_text, thread2, 0.45, 0.90, "📝 Analyzing screenplay structure for scoring...")
-    thread2.join()
 
     if result2["error"]:
         progress_bar.empty()
@@ -281,6 +288,7 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
         st.error(f"Screenplay generation failed: {result2['error']}")
         st.stop()
 
+    st.session_state.synopsis = result1["value"]
     st.session_state.screenplay = result2["value"]
 
     # Phase 3: Done
