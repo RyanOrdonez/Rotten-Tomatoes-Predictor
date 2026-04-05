@@ -177,21 +177,32 @@ def rate_vibes(synopsis: str, api_key: str | None = None) -> dict[str, int]:
         model="claude-sonnet-4-20250514",
         max_tokens=256,
         system=(
-            "You are a movie vibe analyst. Carefully read the synopsis and rate it on each "
-            "emotional category from 0 to 100.\n\n"
-            "BE EXTREME AND HONEST. Use the FULL range:\n"
-            "- A pure horror film with zero comedy should get 😂 Laughs: 2-10\n"
-            "- A slapstick comedy should get 😂 Laughs: 85-95\n"
-            "- A gritty action thriller with no romance should get 💓 Romance: 0-10\n"
-            "- A tearjerker drama should get 😢 Tears: 80-95\n"
-            "- A lighthearted kids movie should get 😱 Scares: 0-5\n\n"
-            "Do NOT cluster scores around 40-60. Differentiate sharply based on the actual content.\n\n"
-            f"Categories: {categories_str}\n\n"
-            "Respond ONLY with a JSON object. Example:\n"
-            '{{"😂 Laughs": 8, "😢 Tears": 85, "💓 Romance": 45, "😱 Scares": 3, "🔥 Thrills": 30}}'
+            "You rate movies on how they make the AUDIENCE FEEL. Read the synopsis carefully.\n\n"
+            "Rate each category 0-100 based on WHAT THE MOVIE IS ACTUALLY ABOUT:\n\n"
+            "😂 Laughs = How FUNNY is this movie? Comedy, humor, jokes, witty dialogue.\n"
+            "  - Romantic comedy about a food critic dating a chef = 60-80\n"
+            "  - Dark horror film = 0-10\n\n"
+            "😢 Tears = How EMOTIONALLY SAD or moving? Will the audience cry?\n"
+            "  - Tragic love story or death of a character = 70-90\n"
+            "  - Light action comedy = 0-15\n\n"
+            "💓 Romance = How much LOVE and ROMANTIC RELATIONSHIPS are central?\n"
+            "  - A love story, rom-com, or relationship drama = 70-95\n"
+            "  - War movie with no love interest = 0-10\n\n"
+            "😱 Scares = How SCARY or HORRIFYING? Monsters, ghosts, serial killers, jump scares.\n"
+            "  - Horror movie = 70-95\n"
+            "  - Romantic comedy = 0-5\n"
+            "  - Drama with no horror elements = 0-10\n\n"
+            "🔥 Thrills = How much ADRENALINE and EXCITEMENT? Action, chases, suspense, stakes.\n"
+            "  - Action blockbuster = 70-90\n"
+            "  - Quiet indie drama = 5-15\n\n"
+            "IMPORTANT: A rom-com should have HIGH Romance and Laughs, LOW Scares.\n"
+            "A horror film should have HIGH Scares, LOW Romance and Laughs.\n"
+            "Match the scores to what the movie ACTUALLY IS.\n\n"
+            "Respond with ONLY a JSON object, no other text:\n"
+            '{{"😂 Laughs": 72, "😢 Tears": 15, "💓 Romance": 85, "😱 Scares": 2, "🔥 Thrills": 25}}'
         ),
         messages=[
-            {"role": "user", "content": synopsis}
+            {"role": "user", "content": f"Rate this movie synopsis:\n\n{synopsis}"}
         ],
     )
 
