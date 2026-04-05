@@ -6,32 +6,14 @@ Type your movie concept into the web app, AI expands it into a screenplay, and a
 
 ---
 
-## Try It
+## Try It Now
 
-<!-- If deployed to Streamlit Cloud, replace with your app URL -->
-<!-- [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-url.streamlit.app) -->
+<!-- Once deployed, uncomment and replace with your Streamlit Cloud URL: -->
+<!-- [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-name.streamlit.app) -->
 
-### Run Locally
+**No install required.** Just click the link above to use the app in your browser.
 
-```bash
-git clone https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor.git
-cd Rotten-Tomatoes-Predictor
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-That's it. The trained model is included in the repo. The spaCy language model downloads automatically on first run.
-
-To use AI-powered script expansion, you'll need an [Anthropic API key](https://console.anthropic.com/) -- enter it directly in the app. Without one, you can still paste a full script and get a prediction.
-
-### Deploy to Streamlit Cloud (Free)
-
-1. Fork this repo
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Connect your GitHub and select this repo
-4. Set `app.py` as the main file
-5. Add your `ANTHROPIC_API_KEY` in the Secrets section
-6. Deploy
+Each user gets **3 free AI predictions per day**.
 
 ---
 
@@ -61,6 +43,32 @@ A **Gradient Boosting Regressor** trained on **739 real screenplays** paired wit
 This is an experimental demo. Predicting critic scores from screenplay text alone is extremely difficult -- critical reception depends on directing, acting, budget, marketing, and many factors not in a script. The model was trained on only 739 samples. Treat predictions as entertainment, not forecasts.
 
 The original deep learning research (FFNN, BERT, BERT+Fusion) is preserved in [`notebooks/`](notebooks/RottenTomatoesScorePredictor.ipynb).
+
+---
+
+## Self-Hosting / Development
+
+If you want to run this yourself:
+
+```bash
+git clone https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor.git
+cd Rotten-Tomatoes-Predictor
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The trained model is included in the repo. spaCy downloads automatically on first run.
+
+### Deploy Your Own (Free)
+
+1. Fork this repo
+2. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub
+3. Select your forked repo, set `app.py` as the main file
+4. Add your `ANTHROPIC_API_KEY` in **Settings > Secrets** as:
+   ```toml
+   ANTHROPIC_API_KEY = "sk-ant-..."
+   ```
+5. Click Deploy
 
 ---
 

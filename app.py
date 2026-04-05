@@ -4,7 +4,11 @@ Run with:
     streamlit run app.py
 """
 
+import hashlib
+import json
 import os
+import time
+from pathlib import Path
 
 import streamlit as st
 
@@ -13,6 +17,96 @@ st.set_page_config(
     page_icon="🍅",
     layout="centered",
 )
+
+# ---------------------------------------------------------------------------
+# Rate limiting — track usage by IP, max 3 AI predictions per day
+# ---------------------------------------------------------------------------
+RATE_LIMIT_DIR = Path("/tmp/rt_predictor_rate_limits")
+MAX_AI_PREDICTIONS_PER_DAY = 3
+
+
+def _get_user_ip() -> str:
+    """Get a hashed identifier for the current user."""
+    # Streamlit Cloud exposes headers via st.context
+    try:
+        headers = st.context.headers
+        ip = headers.get("X-Forwarded-For", headers.get("Remote-Addr", "unknown"))
+        # Take the first IP if there are multiple (proxy chain)
+        ip = ip.split(",")[0].strip()
+    except Exception:
+        ip = "unknown"
+    return hashlib.sha256(ip.encode()).hexdigest()[:16]
+
+
+def _check_rate_limit() -> bool:
+    """Return True if the user is within their daily AI prediction limit."""
+    RATE_LIMIT_DIR.mkdir(parents=True, exist_ok=True)
+    user_hash = _get_user_ip()
+    today = time.strftime("%Y-%m-%d")
+    limit_file = RATE_LIMIT_DIR / f"{user_hash}.json"
+
+    data = {"date": today, "count": 0}
+    if limit_file.exists():
+        try:
+            data = json.loads(limit_file.read_text())
+        except Exception:
+            pass
+
+    # Reset count if it's a new day
+    if data.get("date") != today:
+        data = {"date": today, "count": 0}
+
+    return data["count"] < MAX_AI_PREDICTIONS_PER_DAY
+
+
+def _increment_usage():
+    """Record one AI prediction for the current user."""
+    RATE_LIMIT_DIR.mkdir(parents=True, exist_ok=True)
+    user_hash = _get_user_ip()
+    today = time.strftime("%Y-%m-%d")
+    limit_file = RATE_LIMIT_DIR / f"{user_hash}.json"
+
+    data = {"date": today, "count": 0}
+    if limit_file.exists():
+        try:
+            data = json.loads(limit_file.read_text())
+        except Exception:
+            pass
+
+    if data.get("date") != today:
+        data = {"date": today, "count": 0}
+
+    data["count"] += 1
+    limit_file.write_text(json.dumps(data))
+
+
+def _get_remaining_uses() -> int:
+    """Return how many AI predictions the user has left today."""
+    RATE_LIMIT_DIR.mkdir(parents=True, exist_ok=True)
+    user_hash = _get_user_ip()
+    today = time.strftime("%Y-%m-%d")
+    limit_file = RATE_LIMIT_DIR / f"{user_hash}.json"
+
+    data = {"date": today, "count": 0}
+    if limit_file.exists():
+        try:
+            data = json.loads(limit_file.read_text())
+        except Exception:
+            pass
+
+    if data.get("date") != today:
+        return MAX_AI_PREDICTIONS_PER_DAY
+
+    return max(0, MAX_AI_PREDICTIONS_PER_DAY - data["count"])
+
+
+def _get_api_key() -> str | None:
+    """Get the Anthropic API key from Streamlit secrets or environment."""
+    try:
+        return st.secrets["ANTHROPIC_API_KEY"]
+    except Exception:
+        return os.environ.get("ANTHROPIC_API_KEY")
+
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -30,6 +124,9 @@ with st.sidebar:
         Rotten Tomatoes critic scores.
         """
     )
+    st.divider()
+    remaining = _get_remaining_uses()
+    st.info(f"AI predictions remaining today: **{remaining}/{MAX_AI_PREDICTIONS_PER_DAY}**")
     st.divider()
     st.caption("Built by Ryan Ordonez")
 
@@ -50,78 +147,55 @@ st.warning(
 )
 
 # ---------------------------------------------------------------------------
-# Mode selection
-# ---------------------------------------------------------------------------
-mode = st.radio(
-    "Input mode",
-    ["Expand my idea with AI", "Paste a full script"],
-    horizontal=True,
-)
-
-# ---------------------------------------------------------------------------
-# API key (only for AI expansion mode)
-# ---------------------------------------------------------------------------
-api_key = None
-if mode == "Expand my idea with AI":
-    api_key = st.text_input(
-        "Anthropic API Key",
-        type="password",
-        value=os.environ.get("ANTHROPIC_API_KEY", ""),
-        help="Required for AI expansion. Get one at console.anthropic.com",
-    )
-
-# ---------------------------------------------------------------------------
 # Text input
 # ---------------------------------------------------------------------------
-if mode == "Expand my idea with AI":
-    user_text = st.text_area(
-        "Describe your movie idea",
-        height=180,
-        placeholder=(
-            "e.g., A prequel to Indiana Jones where he is a teenage boy "
-            "following in his father's footsteps to find lost treasures. "
-            "He has a love interest that never pans out, which drives him "
-            "to search for a mythical artifact that will win her heart. "
-            "Along the way he falls in love with his colleague instead..."
-        ),
-    )
-else:
-    user_text = st.text_area(
-        "Paste screenplay text",
-        height=300,
-        placeholder="Paste a full screenplay or script here...",
-    )
+user_text = st.text_area(
+    "Describe your movie idea",
+    height=180,
+    placeholder=(
+        "e.g., A prequel to Indiana Jones where he is a teenage boy "
+        "following in his father's footsteps to find lost treasures. "
+        "He has a love interest that never pans out, which drives him "
+        "to search for a mythical artifact that will win her heart. "
+        "Along the way he falls in love with his colleague instead..."
+    ),
+)
 
 # ---------------------------------------------------------------------------
 # Predict button
 # ---------------------------------------------------------------------------
-if st.button("Predict Score", type="primary", use_container_width=True):
+if st.button("🎬 Predict Score", type="primary", use_container_width=True):
     if not user_text.strip():
-        st.error("Please enter some text first.")
+        st.error("Please enter a movie idea first.")
         st.stop()
 
-    script_text = user_text
+    # Check API key
+    api_key = _get_api_key()
+    if not api_key:
+        st.error("AI expansion is not configured. The app owner needs to set the ANTHROPIC_API_KEY.")
+        st.stop()
+
+    # Check rate limit
+    if not _check_rate_limit():
+        st.error(
+            f"You've used all {MAX_AI_PREDICTIONS_PER_DAY} AI predictions for today. "
+            "Come back tomorrow!"
+        )
+        st.stop()
 
     # --- AI Expansion ---
-    if mode == "Expand my idea with AI":
-        if not api_key:
-            st.error(
-                "Please provide an Anthropic API key to use AI expansion, "
-                "or switch to 'Paste a full script' mode."
-            )
+    with st.spinner("Expanding your idea into a screenplay with AI..."):
+        try:
+            from src.script_expander import expand_plot_to_script
+
+            script_text = expand_plot_to_script(user_text, api_key=api_key)
+            _increment_usage()
+        except Exception as e:
+            st.error(f"AI expansion failed: {e}")
             st.stop()
 
-        with st.spinner("Expanding your idea into a screenplay with AI..."):
-            try:
-                from src.script_expander import expand_plot_to_script
-
-                script_text = expand_plot_to_script(user_text, api_key=api_key)
-            except Exception as e:
-                st.error(f"AI expansion failed: {e}")
-                st.stop()
-
-        with st.expander("View generated screenplay", expanded=False):
-            st.text(script_text)
+    with st.expander("View generated screenplay", expanded=False):
+        st.text(script_text)
 
     # --- Feature Extraction ---
     with st.spinner("Extracting script features..."):
@@ -150,10 +224,7 @@ if st.button("Predict Score", type="primary", use_container_width=True):
 
             score = predict_score(features)
         except FileNotFoundError:
-            st.error(
-                "Model not found. Run `python train_model.py` first to train "
-                "and save the model."
-            )
+            st.error("Model not found. The app is not configured correctly.")
             st.stop()
         except Exception as e:
             st.error(f"Prediction failed: {e}")
