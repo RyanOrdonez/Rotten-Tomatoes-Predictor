@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import time
+import threading
 from pathlib import Path
 
 import streamlit as st
@@ -15,7 +16,18 @@ import streamlit as st
 st.set_page_config(
     page_title="RT Score Predictor",
     page_icon="🍅",
-    layout="centered",
+    layout="wide",
+)
+
+# Reduce top padding and tighten layout
+st.markdown(
+    """
+    <style>
+    .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+    header { visibility: hidden; }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -25,7 +37,8 @@ RATE_LIMIT_DIR = Path("/tmp/rt_predictor_rate_limits")
 BUDGET_FILE = RATE_LIMIT_DIR / "_monthly_budget.json"
 MAX_AI_PREDICTIONS_PER_DAY = 3
 MONTHLY_BUDGET_USD = 5.00
-EST_COST_PER_PREDICTION = 0.03
+# Two API calls per prediction (synopsis + screenplay)
+EST_COST_PER_PREDICTION = 0.05
 
 
 def _get_user_ip() -> str:
@@ -118,11 +131,44 @@ def _get_api_key() -> str | None:
         return os.environ.get("ANTHROPIC_API_KEY")
 
 
+def _run_in_thread(func, *args):
+    """Run a function in a thread and return the result."""
+    result = {"value": None, "error": None}
+
+    def wrapper():
+        try:
+            result["value"] = func(*args)
+        except Exception as e:
+            result["error"] = e
+
+    thread = threading.Thread(target=wrapper)
+    thread.start()
+    return thread, result
+
+
+def _animate_progress(bar, status, thread, start_pct, end_pct, label):
+    """Smoothly animate progress bar while a thread is running."""
+    status.text(label)
+    current = start_pct
+    step = 0.02
+    while thread.is_alive():
+        if current < end_pct - 0.02:
+            current += step
+            # Slow down as we approach the target to avoid hitting it before done
+            if current > (start_pct + end_pct) / 2:
+                step = 0.005
+            bar.progress(min(current, end_pct - 0.01))
+        time.sleep(0.3)
+    bar.progress(end_pct)
+
+
 # ---------------------------------------------------------------------------
 # Initialize session state
 # ---------------------------------------------------------------------------
 if "synopsis" not in st.session_state:
     st.session_state.synopsis = None
+if "screenplay" not in st.session_state:
+    st.session_state.screenplay = None
 if "score" not in st.session_state:
     st.session_state.score = None
 if "features" not in st.session_state:
@@ -137,7 +183,7 @@ with st.sidebar:
         """
         1. **Describe** your movie idea in the text box
         2. **AI generates** a polished movie synopsis
-        3. **Features** like readability and structure are extracted
+        3. **Features** are extracted and analyzed
         4. A **trained model** predicts the Rotten Tomatoes score
 
         The model was trained on **739 real screenplays** and their actual
@@ -146,7 +192,7 @@ with st.sidebar:
     )
     st.divider()
     remaining = _get_remaining_uses()
-    st.info(f"AI predictions remaining today: **{remaining}/{MAX_AI_PREDICTIONS_PER_DAY}**")
+    st.info(f"Predictions remaining today: **{remaining}/{MAX_AI_PREDICTIONS_PER_DAY}**")
     st.divider()
     st.caption("Built by Ryan Ordonez")
 
@@ -159,10 +205,9 @@ st.markdown(
     "predicts how critics might rate it."
 )
 
-st.warning(
-    "**Disclaimer:** This prediction is experimental. The model was trained on "
-    "739 screenplays and should be treated as a fun demo, not a reliable forecast.",
-    icon="⚠️",
+st.caption(
+    "⚠️ This prediction is experimental — trained on 739 screenplays. "
+    "For entertainment only."
 )
 
 # ---------------------------------------------------------------------------
@@ -170,7 +215,7 @@ st.warning(
 # ---------------------------------------------------------------------------
 user_text = st.text_area(
     "Describe your movie idea",
-    height=120,
+    height=100,
     placeholder=(
         "e.g., A prequel to Indiana Jones where he is a teenage boy "
         "following in his father's footsteps to find lost treasures. "
@@ -196,23 +241,57 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
 
     if not _check_rate_limit():
         st.error(
-            f"You've used all {MAX_AI_PREDICTIONS_PER_DAY} AI predictions for today. "
+            f"You've used all {MAX_AI_PREDICTIONS_PER_DAY} predictions for today. "
             "Come back tomorrow!"
         )
         st.stop()
 
-    with st.spinner("AI is writing your movie synopsis..."):
-        try:
-            from src.script_expander import expand_plot_to_synopsis
+    # Reset previous results
+    st.session_state.synopsis = None
+    st.session_state.screenplay = None
+    st.session_state.score = None
+    st.session_state.features = None
 
-            st.session_state.synopsis = expand_plot_to_synopsis(user_text, api_key=api_key)
-            st.session_state.score = None
-            st.session_state.features = None
-            _increment_usage()
-            _record_spend(EST_COST_PER_PREDICTION)
-        except Exception as e:
-            st.error(f"Synopsis generation failed: {e}")
-            st.stop()
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    # Phase 1: Generate synopsis (0% → 45%)
+    from src.script_expander import expand_plot_to_synopsis, expand_plot_to_screenplay
+
+    thread, result = _run_in_thread(expand_plot_to_synopsis, user_text, api_key)
+    _animate_progress(progress_bar, status_text, thread, 0.0, 0.45, "🎬 Generating your movie synopsis...")
+    thread.join()
+
+    if result["error"]:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(f"Synopsis generation failed: {result['error']}")
+        st.stop()
+
+    st.session_state.synopsis = result["value"]
+
+    # Phase 2: Generate screenplay for scoring (45% → 90%)
+    thread2, result2 = _run_in_thread(expand_plot_to_screenplay, user_text, api_key)
+    _animate_progress(progress_bar, status_text, thread2, 0.45, 0.90, "📝 Analyzing screenplay structure for scoring...")
+    thread2.join()
+
+    if result2["error"]:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(f"Screenplay generation failed: {result2['error']}")
+        st.stop()
+
+    st.session_state.screenplay = result2["value"]
+
+    # Phase 3: Done
+    progress_bar.progress(1.0)
+    status_text.text("✅ Ready to predict!")
+    time.sleep(0.5)
+    progress_bar.empty()
+    status_text.empty()
+
+    _increment_usage()
+    _record_spend(EST_COST_PER_PREDICTION)
 
     st.rerun()
 
@@ -235,7 +314,8 @@ if st.session_state.synopsis:
                         from src.feature_extraction import extract_features
                         from src.predictor import predict_score
 
-                        st.session_state.features = extract_features(st.session_state.synopsis)
+                        # Extract features from the SCREENPLAY (not synopsis)
+                        st.session_state.features = extract_features(st.session_state.screenplay)
                         st.session_state.score = predict_score(st.session_state.features)
                     except FileNotFoundError:
                         st.error("Model not found. The app is not configured correctly.")
