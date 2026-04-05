@@ -16,7 +16,7 @@ import streamlit as st
 st.set_page_config(
     page_title="RT Score Predictor",
     page_icon="🍅",
-    layout="wide",
+    layout="centered",
 )
 
 # Reduce top padding and tighten layout
@@ -316,7 +316,10 @@ if st.session_state.synopsis:
 
     with col_synopsis:
         st.subheader("📖 Movie Synopsis")
-        st.markdown(st.session_state.synopsis)
+        st.markdown(
+            f"<div style='font-size: 0.9rem; line-height: 1.5;'>{st.session_state.synopsis}</div>",
+            unsafe_allow_html=True,
+        )
 
         if st.session_state.score is None:
             if st.button("🎬 Predict My Score", type="primary", use_container_width=True):
