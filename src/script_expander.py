@@ -175,40 +175,61 @@ def rate_vibes(synopsis: str, api_key: str | None = None) -> dict[str, int]:
 
     message = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=256,
+        max_tokens=1024,
         system=(
-            "Read the movie synopsis below. Rate how the audience would experience this movie "
-            "on each emotional dimension from 0 to 100.\n\n"
-            "😂 Laughs — Will people laugh? (0 = not funny at all, 100 = nonstop hilarious)\n"
-            "😢 Tears — Will people cry? (0 = not emotional, 100 = devastating)\n"
-            "💓 Romance — Is there a love story? (0 = no romance, 100 = deeply romantic)\n"
-            "😱 Scares — Is it scary? Like horror-movie scary. (0 = not scary, 100 = terrifying)\n"
-            "🔥 Thrills — Is it exciting/intense? (0 = calm and quiet, 100 = edge of your seat)\n\n"
-            "Just read the synopsis naturally and respond with your honest gut reaction as JSON.\n"
-            "Respond with ONLY a JSON object, nothing else."
+            "Read the movie synopsis and rate how the audience would experience it. "
+            "Use the rate_vibes tool to submit your ratings."
         ),
+        tools=[
+            {
+                "name": "rate_vibes",
+                "description": "Submit audience vibe ratings for a movie synopsis",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "laughs": {
+                            "type": "integer",
+                            "description": "How funny is this movie? 0=not funny at all, 100=nonstop hilarious. A comedy should be 60-90, a dark drama should be 0-15.",
+                        },
+                        "tears": {
+                            "type": "integer",
+                            "description": "Will people cry? 0=not emotional, 100=devastating. A tragedy should be 70-95, a light comedy should be 0-20.",
+                        },
+                        "romance": {
+                            "type": "integer",
+                            "description": "Is there a love story? 0=no romance, 100=deeply romantic. A rom-com should be 70-95, an action movie with no love interest should be 0-10.",
+                        },
+                        "scares": {
+                            "type": "integer",
+                            "description": "Is it scary like a horror movie? Monsters, ghosts, serial killers. 0=not scary, 100=terrifying. A horror film should be 70-95, a rom-com or drama should be 0-10.",
+                        },
+                        "thrills": {
+                            "type": "integer",
+                            "description": "Is it exciting and intense? Action, chases, suspense. 0=calm and quiet, 100=edge of your seat. An action blockbuster should be 70-90, a quiet indie drama should be 5-20.",
+                        },
+                    },
+                    "required": ["laughs", "tears", "romance", "scares", "thrills"],
+                },
+            }
+        ],
+        tool_choice={"type": "tool", "name": "rate_vibes"},
         messages=[
-            {"role": "user", "content": synopsis}
+            {"role": "user", "content": f"Rate this movie:\n\n{synopsis}"}
         ],
     )
 
     try:
-        raw = message.content[0].text.strip()
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-            if raw.endswith("```"):
-                raw = raw[:-3]
-            raw = raw.strip()
-        # Find the JSON object in the response
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        if start >= 0 and end > start:
-            raw = raw[start:end]
-        result = json.loads(raw)
-        # Validate we got numbers, not all the same
-        if isinstance(result, dict) and len(result) >= 3:
-            return result
+        # Extract tool use result
+        for block in message.content:
+            if block.type == "tool_use" and block.name == "rate_vibes":
+                ratings = block.input
+                return {
+                    "😂 Laughs": int(ratings.get("laughs", 50)),
+                    "😢 Tears": int(ratings.get("tears", 50)),
+                    "💓 Romance": int(ratings.get("romance", 50)),
+                    "😱 Scares": int(ratings.get("scares", 50)),
+                    "🔥 Thrills": int(ratings.get("thrills", 50)),
+                }
     except Exception:
         pass
 
