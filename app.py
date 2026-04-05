@@ -199,7 +199,7 @@ with st.sidebar:
     if st.button("🔄 Start Over", use_container_width=True):
         for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
             st.session_state[key] = None
-        st.session_state.user_input = ""
+        st.session_state.clear_text = True
         st.rerun()
 
     st.divider()
@@ -221,6 +221,11 @@ st.caption(
 # ---------------------------------------------------------------------------
 # Step 1: Movie idea input + Generate Synopsis
 # ---------------------------------------------------------------------------
+# Handle clear request from previous rerun
+if st.session_state.get("clear_text"):
+    st.session_state.clear_text = False
+    st.session_state.user_input = ""
+
 user_text = st.text_area(
     "Describe your movie idea",
     height=150,
@@ -241,7 +246,7 @@ with btn_col2:
     if st.button("🗑️ Clear", use_container_width=True):
         for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
             st.session_state[key] = None
-        st.session_state.user_input = ""
+        st.session_state.clear_text = True
         st.rerun()
 
 if generate_clicked:
