@@ -396,20 +396,30 @@ if st.session_state.synopsis:
 
             from src.script_expander import VIBE_CATEGORIES
 
+            vibe_colors = {
+                "😂 Laughs": "#FFB800",
+                "😢 Tears": "#4A90D9",
+                "💓 Romance": "#E84393",
+                "😱 Scares": "#6C5CE7",
+                "🔥 Thrills": "#E17055",
+            }
+
             for cat_name, endpoints in VIBE_CATEGORIES.items():
                 vibe_score = vibes.get(cat_name, 50)
                 vibe_score = max(0, min(100, vibe_score))
                 label = _get_vibe_label(vibe_score, endpoints)
+                bar_color = vibe_colors.get(cat_name, "#e63946")
 
                 st.markdown(
-                    f"<div style='font-size: 0.8rem; margin-bottom: 0.1rem;'>"
-                    f"{cat_name}</div>",
-                    unsafe_allow_html=True,
-                )
-                st.progress(vibe_score / 100)
-                st.markdown(
-                    f"<div style='font-size: 0.7rem; color: #666; margin-top: -0.5rem; "
-                    f"margin-bottom: 0.5rem; font-style: italic;'>{label}</div>",
+                    f"<div style='margin-bottom: 0.6rem;'>"
+                    f"<div style='font-size: 0.8rem; margin-bottom: 0.25rem;'>"
+                    f"{cat_name} <span style='color: #888; font-size: 0.75rem;'>{vibe_score}%</span></div>"
+                    f"<div style='background: #e8e8e8; border-radius: 6px; height: 10px; width: 100%;'>"
+                    f"<div style='background: {bar_color}; border-radius: 6px; height: 10px; "
+                    f"width: {vibe_score}%; transition: width 0.3s;'></div></div>"
+                    f"<div style='font-size: 0.7rem; color: #666; margin-top: 0.15rem; "
+                    f"font-style: italic;'>{label}</div>"
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
 
