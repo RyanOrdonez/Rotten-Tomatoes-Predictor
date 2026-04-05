@@ -4,5 +4,4 @@ __pycache__/
 *.pyo
 .venv/
 venv/
-models/*.joblib
 .streamlit/secrets.toml

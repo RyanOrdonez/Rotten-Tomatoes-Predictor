@@ -9,8 +9,13 @@ import re
 import spacy
 from textstat import flesch_kincaid_grade
 
-# Load spaCy model once at module level
-nlp = spacy.load("en_core_web_sm")
+# Load spaCy model once at module level, auto-download if missing
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    from spacy.cli import download
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 FEATURE_NAMES = [
     "script_length",
