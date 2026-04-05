@@ -19,23 +19,54 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Rate limiting — track usage by IP, max 3 AI predictions per day
+# Rate limiting — per-user daily limit + global monthly budget cap
 # ---------------------------------------------------------------------------
 RATE_LIMIT_DIR = Path("/tmp/rt_predictor_rate_limits")
+BUDGET_FILE = RATE_LIMIT_DIR / "_monthly_budget.json"
 MAX_AI_PREDICTIONS_PER_DAY = 3
+MONTHLY_BUDGET_USD = 5.00
+# Estimated cost per prediction (Claude Sonnet ~4K output tokens)
+EST_COST_PER_PREDICTION = 0.03
 
 
 def _get_user_ip() -> str:
     """Get a hashed identifier for the current user."""
-    # Streamlit Cloud exposes headers via st.context
     try:
         headers = st.context.headers
         ip = headers.get("X-Forwarded-For", headers.get("Remote-Addr", "unknown"))
-        # Take the first IP if there are multiple (proxy chain)
         ip = ip.split(",")[0].strip()
     except Exception:
         ip = "unknown"
     return hashlib.sha256(ip.encode()).hexdigest()[:16]
+
+
+def _load_budget() -> dict:
+    """Load the monthly budget tracker."""
+    RATE_LIMIT_DIR.mkdir(parents=True, exist_ok=True)
+    current_month = time.strftime("%Y-%m")
+    data = {"month": current_month, "spent": 0.0}
+    if BUDGET_FILE.exists():
+        try:
+            data = json.loads(BUDGET_FILE.read_text())
+        except Exception:
+            pass
+    # Reset if new month
+    if data.get("month") != current_month:
+        data = {"month": current_month, "spent": 0.0}
+    return data
+
+
+def _check_budget() -> bool:
+    """Return True if monthly budget has not been exceeded."""
+    data = _load_budget()
+    return data["spent"] < MONTHLY_BUDGET_USD
+
+
+def _record_spend(cost: float):
+    """Record a spend amount against the monthly budget."""
+    data = _load_budget()
+    data["spent"] = data.get("spent", 0.0) + cost
+    BUDGET_FILE.write_text(json.dumps(data))
 
 
 def _check_rate_limit() -> bool:
@@ -52,7 +83,6 @@ def _check_rate_limit() -> bool:
         except Exception:
             pass
 
-    # Reset count if it's a new day
     if data.get("date") != today:
         data = {"date": today, "count": 0}
 
@@ -175,6 +205,14 @@ if st.button("🎬 Predict Score", type="primary", use_container_width=True):
         st.error("AI expansion is not configured. The app owner needs to set the ANTHROPIC_API_KEY.")
         st.stop()
 
+    # Check monthly budget
+    if not _check_budget():
+        st.error(
+            "The monthly AI budget has been reached. "
+            "Please check back next month!"
+        )
+        st.stop()
+
     # Check rate limit
     if not _check_rate_limit():
         st.error(
@@ -190,6 +228,7 @@ if st.button("🎬 Predict Score", type="primary", use_container_width=True):
 
             script_text = expand_plot_to_script(user_text, api_key=api_key)
             _increment_usage()
+            _record_spend(EST_COST_PER_PREDICTION)
         except Exception as e:
             st.error(f"AI expansion failed: {e}")
             st.stop()
