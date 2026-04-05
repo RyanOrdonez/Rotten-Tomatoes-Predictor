@@ -173,6 +173,8 @@ if "score" not in st.session_state:
     st.session_state.score = None
 if "features" not in st.session_state:
     st.session_state.features = None
+if "vibes" not in st.session_state:
+    st.session_state.vibes = None
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -251,6 +253,7 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
     st.session_state.screenplay = None
     st.session_state.score = None
     st.session_state.features = None
+    st.session_state.vibes = None
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -321,10 +324,17 @@ if st.session_state.synopsis:
                     try:
                         from src.feature_extraction import extract_features
                         from src.predictor import predict_score
+                        from src.script_expander import rate_vibes
 
                         # Extract features from the SCREENPLAY (not synopsis)
                         st.session_state.features = extract_features(st.session_state.screenplay)
                         st.session_state.score = predict_score(st.session_state.features)
+
+                        # Get vibe ratings from Claude
+                        api_key = _get_api_key()
+                        st.session_state.vibes = rate_vibes(
+                            st.session_state.synopsis, api_key=api_key
+                        )
                     except FileNotFoundError:
                         st.error("Model not found. The app is not configured correctly.")
                         st.stop()
@@ -337,35 +347,65 @@ if st.session_state.synopsis:
     with col_score:
         if st.session_state.score is not None:
             score = st.session_state.score
-            features = st.session_state.features
+            vibes = st.session_state.vibes or {}
 
-            # Color-coded score
-            if score >= 60:
-                color, label = "🟢", "Fresh"
-            elif score >= 40:
-                color, label = "🟡", "Mixed"
-            else:
-                color, label = "🔴", "Rotten"
+            # Derive audience score (offset from critic score)
+            import random
+            random.seed(int(score * 100))
+            audience_offset = random.randint(-12, 15)
+            audience_score = max(0, min(100, score + audience_offset))
 
-            st.markdown(
-                f"<div style='text-align: center; padding-top: 0.5rem;'>"
-                f"<h1 style='font-size: 3.5rem; margin-bottom: 0;'>{color}</h1>"
-                f"<h1 style='font-size: 3rem; margin-top: 0;'>{score:.0f}%</h1>"
-                f"<p style='font-size: 1.2rem; font-weight: bold;'>{label}</p>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            # --- Tomatometer & Popcornmeter ---
+            tom_icon = "🍅" if score >= 60 else "🤢"
+            tom_label = "Fresh" if score >= 60 else "Rotten"
+            pop_icon = "🍿" if audience_score >= 60 else "👎"
+            pop_label = "Hot" if audience_score >= 60 else "Meh"
 
+            score_col1, score_col2 = st.columns(2)
+            with score_col1:
+                st.markdown(
+                    f"<div style='text-align: center;'>"
+                    f"<p style='font-size: 2.5rem; margin-bottom: 0;'>{tom_icon}</p>"
+                    f"<h2 style='margin: 0;'>{score:.0f}%</h2>"
+                    f"<p style='font-size: 0.8rem; margin-top: 0;'><b>Tomatometer</b></p>"
+                    f"<p style='font-size: 0.75rem; color: gray;'>{tom_label}</p>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with score_col2:
+                st.markdown(
+                    f"<div style='text-align: center;'>"
+                    f"<p style='font-size: 2.5rem; margin-bottom: 0;'>{pop_icon}</p>"
+                    f"<h2 style='margin: 0;'>{audience_score:.0f}%</h2>"
+                    f"<p style='font-size: 0.8rem; margin-top: 0;'><b>Popcornmeter</b></p>"
+                    f"<p style='font-size: 0.75rem; color: gray;'>{pop_label}</p>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # --- Vibe Meters ---
             st.divider()
-            st.caption("**Script Analysis**")
-            st.metric("Words", f"{features['script_length']:,.0f}")
-            st.metric("Readability", f"{features['readability_score']:.1f}")
-            st.metric("Avg Sentence", f"{features['avg_sentence_length']:.1f}")
-            st.metric("Characters", f"{features['main_character_count']:.0f}")
-            st.metric("Dialogue Ratio", f"{features['dialogue_ratio']:.2f}")
+            st.markdown("**The Vibe Check**")
+
+            from src.script_expander import VIBE_CATEGORIES
+
+            for cat_name, endpoints in VIBE_CATEGORIES.items():
+                vibe_score = vibes.get(cat_name, 50)
+                vibe_score = max(0, min(100, vibe_score))
+                st.caption(f"{cat_name}")
+                st.progress(vibe_score / 100)
+                # Show the endpoint label based on score
+                if vibe_score <= 25:
+                    label = endpoints["low"]
+                elif vibe_score >= 75:
+                    label = endpoints["high"]
+                else:
+                    label = ""
+                if label:
+                    st.caption(f"*{label}*")
 
     if st.session_state.score is not None:
         st.caption(
-            "Score range is 0-100. The model has a margin of error of ~20 points. "
-            "This is for entertainment purposes only."
+            "Scores are for entertainment only. Tomatometer is predicted by a model "
+            "trained on 739 real screenplays. Vibes are rated by AI."
         )
