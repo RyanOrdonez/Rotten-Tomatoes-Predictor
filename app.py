@@ -266,15 +266,26 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
     thread1, result1 = _run_in_thread(expand_plot_to_synopsis, user_text, api_key)
     thread2, result2 = _run_in_thread(expand_plot_to_screenplay, user_text, api_key)
 
-    status_text.text("🎬 Generating synopsis and analyzing structure...")
+    status_text.text("🎬 Writing your movie synopsis...")
     current = 0.0
-    step = 0.02
+    tick = 0
+    status_messages = [
+        "🎬 Writing your movie synopsis...",
+        "📝 Crafting the screenplay...",
+        "🎭 Developing characters...",
+        "🎬 Setting the scenes...",
+        "✨ Adding finishing touches...",
+        "🎥 Polishing the dialogue...",
+    ]
     while thread1.is_alive() or thread2.is_alive():
-        if current < 0.88:
-            current += step
-            if current > 0.5:
-                step = 0.005
-            progress_bar.progress(min(current, 0.89))
+        # Asymptotic approach — always moves, never reaches 0.95
+        remaining = 0.95 - current
+        current += remaining * 0.04
+        progress_bar.progress(min(current, 0.949))
+        # Rotate status text every ~4 seconds (every 13 ticks at 0.3s)
+        if tick % 13 == 0:
+            status_text.text(status_messages[(tick // 13) % len(status_messages)])
+        tick += 1
         time.sleep(0.3)
 
     thread1.join()
