@@ -177,32 +177,18 @@ def rate_vibes(synopsis: str, api_key: str | None = None) -> dict[str, int]:
         model="claude-sonnet-4-20250514",
         max_tokens=256,
         system=(
-            "You rate movies on how they make the AUDIENCE FEEL. Read the synopsis carefully.\n\n"
-            "Rate each category 0-100 based on WHAT THE MOVIE IS ACTUALLY ABOUT:\n\n"
-            "😂 Laughs = How FUNNY is this movie? Comedy, humor, jokes, witty dialogue.\n"
-            "  - Romantic comedy about a food critic dating a chef = 60-80\n"
-            "  - Dark horror film = 0-10\n\n"
-            "😢 Tears = How EMOTIONALLY SAD or moving? Will the audience cry?\n"
-            "  - Tragic love story or death of a character = 70-90\n"
-            "  - Light action comedy = 0-15\n\n"
-            "💓 Romance = How much LOVE and ROMANTIC RELATIONSHIPS are central?\n"
-            "  - A love story, rom-com, or relationship drama = 70-95\n"
-            "  - War movie with no love interest = 0-10\n\n"
-            "😱 Scares = How SCARY or HORRIFYING? Monsters, ghosts, serial killers, jump scares.\n"
-            "  - Horror movie = 70-95\n"
-            "  - Romantic comedy = 0-5\n"
-            "  - Drama with no horror elements = 0-10\n\n"
-            "🔥 Thrills = How much ADRENALINE and EXCITEMENT? Action, chases, suspense, stakes.\n"
-            "  - Action blockbuster = 70-90\n"
-            "  - Quiet indie drama = 5-15\n\n"
-            "IMPORTANT: A rom-com should have HIGH Romance and Laughs, LOW Scares.\n"
-            "A horror film should have HIGH Scares, LOW Romance and Laughs.\n"
-            "Match the scores to what the movie ACTUALLY IS.\n\n"
-            "Respond with ONLY a JSON object, no other text:\n"
-            '{{"😂 Laughs": 72, "😢 Tears": 15, "💓 Romance": 85, "😱 Scares": 2, "🔥 Thrills": 25}}'
+            "Read the movie synopsis below. Rate how the audience would experience this movie "
+            "on each emotional dimension from 0 to 100.\n\n"
+            "😂 Laughs — Will people laugh? (0 = not funny at all, 100 = nonstop hilarious)\n"
+            "😢 Tears — Will people cry? (0 = not emotional, 100 = devastating)\n"
+            "💓 Romance — Is there a love story? (0 = no romance, 100 = deeply romantic)\n"
+            "😱 Scares — Is it scary? Like horror-movie scary. (0 = not scary, 100 = terrifying)\n"
+            "🔥 Thrills — Is it exciting/intense? (0 = calm and quiet, 100 = edge of your seat)\n\n"
+            "Just read the synopsis naturally and respond with your honest gut reaction as JSON.\n"
+            "Respond with ONLY a JSON object, nothing else."
         ),
         messages=[
-            {"role": "user", "content": f"Rate this movie synopsis:\n\n{synopsis}"}
+            {"role": "user", "content": synopsis}
         ],
     )
 
