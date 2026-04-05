@@ -217,7 +217,7 @@ st.caption(
 # ---------------------------------------------------------------------------
 user_text = st.text_area(
     "Describe your movie idea",
-    height=100,
+    height=150,
     placeholder=(
         "e.g., A prequel to Indiana Jones where he is a teenage boy "
         "following in his father's footsteps to find lost treasures. "
