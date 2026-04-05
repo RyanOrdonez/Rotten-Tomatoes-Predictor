@@ -196,11 +196,11 @@ with st.sidebar:
     remaining = _get_remaining_uses()
     st.info(f"Predictions remaining today: **{remaining}/{MAX_AI_PREDICTIONS_PER_DAY}**")
 
-    if st.session_state.synopsis is not None:
-        if st.button("🔄 New Prediction", use_container_width=True):
-            for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
-                st.session_state[key] = None
-            st.rerun()
+    if st.button("🔄 Start Over", use_container_width=True):
+        for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
+            st.session_state[key] = None
+        st.session_state.user_input = ""
+        st.rerun()
 
     st.divider()
     st.caption("Built by Ryan Ordonez")
@@ -231,9 +231,20 @@ user_text = st.text_area(
         "to search for a mythical artifact that will win her heart. "
         "Along the way he falls in love with his colleague instead..."
     ),
+    key="user_input",
 )
 
-if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
+btn_col1, btn_col2 = st.columns([3, 1])
+with btn_col1:
+    generate_clicked = st.button("✨ Generate Synopsis", type="primary", use_container_width=True)
+with btn_col2:
+    if st.button("🗑️ Clear", use_container_width=True):
+        for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
+            st.session_state[key] = None
+        st.session_state.user_input = ""
+        st.rerun()
+
+if generate_clicked:
     if not user_text.strip():
         st.error("Please enter a movie idea first.")
         st.stop()
