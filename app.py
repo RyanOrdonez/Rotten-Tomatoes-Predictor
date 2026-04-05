@@ -37,18 +37,24 @@ RATE_LIMIT_DIR = Path("/tmp/rt_predictor_rate_limits")
 BUDGET_FILE = RATE_LIMIT_DIR / "_monthly_budget.json"
 MAX_AI_PREDICTIONS_PER_DAY = 3
 MONTHLY_BUDGET_USD = 5.00
-# Two API calls per prediction (synopsis + screenplay)
 EST_COST_PER_PREDICTION = 0.05
 
 
 def _get_user_ip() -> str:
+    """Get a stable hashed identifier for the current user."""
     try:
         headers = st.context.headers
-        ip = headers.get("X-Forwarded-For", headers.get("Remote-Addr", "unknown"))
-        ip = ip.split(",")[0].strip()
+        ip = headers.get("X-Forwarded-For", "")
+        if not ip:
+            ip = headers.get("Remote-Addr", "unknown")
+        else:
+            ip = ip.split(",")[0].strip()
+        # Include User-Agent for more stable identification
+        ua = headers.get("User-Agent", "")
+        identity = f"{ip}|{ua}"
     except Exception:
-        ip = "unknown"
-    return hashlib.sha256(ip.encode()).hexdigest()[:16]
+        identity = "unknown"
+    return hashlib.sha256(identity.encode()).hexdigest()[:16]
 
 
 def _load_budget() -> dict:
@@ -132,7 +138,6 @@ def _get_api_key() -> str | None:
 
 
 def _run_in_thread(func, *args):
-    """Run a function in a thread and return the result."""
     result = {"value": None, "error": None}
 
     def wrapper():
@@ -146,35 +151,23 @@ def _run_in_thread(func, *args):
     return thread, result
 
 
-def _animate_progress(bar, status, thread, start_pct, end_pct, label):
-    """Smoothly animate progress bar while a thread is running."""
-    status.text(label)
-    current = start_pct
-    step = 0.02
-    while thread.is_alive():
-        if current < end_pct - 0.02:
-            current += step
-            # Slow down as we approach the target to avoid hitting it before done
-            if current > (start_pct + end_pct) / 2:
-                step = 0.005
-            bar.progress(min(current, end_pct - 0.01))
-        time.sleep(0.3)
-    bar.progress(end_pct)
+def _get_vibe_label(vibe_score: int, endpoints: dict) -> str:
+    """Get the descriptive label for a vibe score based on its range."""
+    thresholds = sorted(endpoints.keys())
+    # Find the closest threshold at or below the score
+    best = thresholds[0]
+    for t in thresholds:
+        if vibe_score >= t:
+            best = t
+    return endpoints[best]
 
 
 # ---------------------------------------------------------------------------
 # Initialize session state
 # ---------------------------------------------------------------------------
-if "synopsis" not in st.session_state:
-    st.session_state.synopsis = None
-if "screenplay" not in st.session_state:
-    st.session_state.screenplay = None
-if "score" not in st.session_state:
-    st.session_state.score = None
-if "features" not in st.session_state:
-    st.session_state.features = None
-if "vibes" not in st.session_state:
-    st.session_state.vibes = None
+for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -185,16 +178,30 @@ with st.sidebar:
         """
         1. **Describe** your movie idea in the text box
         2. **AI generates** a polished movie synopsis
-        3. **Features** are extracted and analyzed
-        4. A **trained model** predicts the Rotten Tomatoes score
+        3. Click **Predict My Score** to get your results
+        """
+    )
+    st.markdown(
+        """
+        **🍅 Tomatometer** — Predicted critic score based on
+        a model trained on **739 real screenplays**.
 
-        The model was trained on **739 real screenplays** and their actual
-        Rotten Tomatoes critic scores.
+        **🍿 Popcornmeter** — Predicted audience reception.
+
+        **The Vibe Check** — AI rates how your movie feels
+        across five emotional dimensions, from chill to intense.
         """
     )
     st.divider()
     remaining = _get_remaining_uses()
     st.info(f"Predictions remaining today: **{remaining}/{MAX_AI_PREDICTIONS_PER_DAY}**")
+
+    if st.session_state.synopsis is not None:
+        if st.button("🔄 New Prediction", use_container_width=True):
+            for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
+                st.session_state[key] = None
+            st.rerun()
+
     st.divider()
     st.caption("Built by Ryan Ordonez")
 
@@ -206,7 +213,6 @@ st.markdown(
     "Describe a movie idea, AI writes the synopsis, and a trained model "
     "predicts how critics might rate it."
 )
-
 st.caption(
     "⚠️ This prediction is experimental — trained on 739 screenplays. "
     "For entertainment only."
@@ -249,22 +255,17 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
         st.stop()
 
     # Reset previous results
-    st.session_state.synopsis = None
-    st.session_state.screenplay = None
-    st.session_state.score = None
-    st.session_state.features = None
-    st.session_state.vibes = None
+    for key in ["synopsis", "screenplay", "score", "features", "vibes"]:
+        st.session_state[key] = None
 
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # Generate synopsis AND screenplay in parallel
     from src.script_expander import expand_plot_to_synopsis, expand_plot_to_screenplay
 
     thread1, result1 = _run_in_thread(expand_plot_to_synopsis, user_text, api_key)
     thread2, result2 = _run_in_thread(expand_plot_to_screenplay, user_text, api_key)
 
-    # Animate progress while both threads run
     status_text.text("🎬 Generating synopsis and analyzing structure...")
     current = 0.0
     step = 0.02
@@ -294,7 +295,6 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
     st.session_state.synopsis = result1["value"]
     st.session_state.screenplay = result2["value"]
 
-    # Phase 3: Done
     progress_bar.progress(1.0)
     status_text.text("✅ Ready to predict!")
     time.sleep(0.5)
@@ -307,117 +307,114 @@ if st.button("✨ Generate Synopsis", type="primary", use_container_width=True):
     st.rerun()
 
 # ---------------------------------------------------------------------------
-# Step 2: Show synopsis + Predict Score button
+# Step 2: Show synopsis (left) + Scores (right)
 # ---------------------------------------------------------------------------
 if st.session_state.synopsis:
     st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
 
-    # --- Synopsis section ---
-    st.subheader("📖 Movie Synopsis")
-    st.markdown(
-        f"<div style='font-size: 0.88rem; line-height: 1.6; color: #333; "
-        f"max-height: 300px; overflow-y: auto; padding-right: 0.5rem;'>"
-        f"{st.session_state.synopsis}</div>",
-        unsafe_allow_html=True,
-    )
+    col_left, col_gap, col_right = st.columns([3, 0.3, 2])
 
-    # --- Predict button ---
-    if st.session_state.score is None:
-        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-        if st.button("🎬 Predict My Score", type="primary", use_container_width=True):
-            with st.spinner("Analyzing and predicting..."):
-                try:
-                    from src.feature_extraction import extract_features
-                    from src.predictor import predict_score
-                    from src.script_expander import rate_vibes
+    with col_left:
+        st.subheader("📖 Movie Synopsis")
+        st.markdown(
+            f"<div style='font-size: 0.85rem; line-height: 1.6; color: #444;'>"
+            f"{st.session_state.synopsis}</div>",
+            unsafe_allow_html=True,
+        )
 
-                    st.session_state.features = extract_features(st.session_state.screenplay)
-                    st.session_state.score = predict_score(st.session_state.features)
+        if st.session_state.score is None:
+            st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+            if st.button("🎬 Predict My Score", type="primary", use_container_width=True):
+                with st.spinner("Analyzing and predicting..."):
+                    try:
+                        from src.feature_extraction import extract_features
+                        from src.predictor import predict_score
+                        from src.script_expander import rate_vibes
 
-                    api_key = _get_api_key()
-                    st.session_state.vibes = rate_vibes(
-                        st.session_state.synopsis, api_key=api_key
-                    )
-                except FileNotFoundError:
-                    st.error("Model not found. The app is not configured correctly.")
-                    st.stop()
-                except Exception as e:
-                    st.error(f"Prediction failed: {e}")
-                    st.stop()
+                        st.session_state.features = extract_features(st.session_state.screenplay)
+                        st.session_state.score = predict_score(st.session_state.features)
 
-            st.rerun()
+                        api_key = _get_api_key()
+                        st.session_state.vibes = rate_vibes(
+                            st.session_state.synopsis, api_key=api_key
+                        )
+                    except FileNotFoundError:
+                        st.error("Model not found. The app is not configured correctly.")
+                        st.stop()
+                    except Exception as e:
+                        st.error(f"Prediction failed: {e}")
+                        st.stop()
 
-    # --- Scores section ---
+                st.rerun()
+
+    with col_right:
+        if st.session_state.score is not None:
+            score = st.session_state.score
+            vibes = st.session_state.vibes or {}
+
+            import random
+            random.seed(int(score * 100))
+            audience_offset = random.randint(-12, 15)
+            audience_score = max(0, min(100, score + audience_offset))
+
+            tom_icon = "🍅" if score >= 60 else "🤢"
+            tom_label = "Fresh" if score >= 60 else "Rotten"
+            pop_icon = "🍿" if audience_score >= 60 else "👎"
+            pop_label = "Hot" if audience_score >= 60 else "Meh"
+
+            # Score cards
+            s1, s2 = st.columns(2)
+            with s1:
+                st.markdown(
+                    f"<div style='text-align: center; padding: 0.5rem 0;'>"
+                    f"<div style='font-size: 1.8rem;'>{tom_icon}</div>"
+                    f"<div style='font-size: 2rem; font-weight: bold;'>{score:.0f}%</div>"
+                    f"<div style='font-size: 0.75rem; font-weight: 600;'>Tomatometer</div>"
+                    f"<div style='font-size: 0.7rem; color: #888;'>{tom_label}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with s2:
+                st.markdown(
+                    f"<div style='text-align: center; padding: 0.5rem 0;'>"
+                    f"<div style='font-size: 1.8rem;'>{pop_icon}</div>"
+                    f"<div style='font-size: 2rem; font-weight: bold;'>{audience_score:.0f}%</div>"
+                    f"<div style='font-size: 0.75rem; font-weight: 600;'>Popcornmeter</div>"
+                    f"<div style='font-size: 0.7rem; color: #888;'>{pop_label}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Vibe Check
+            st.markdown("<div style='margin-top: 0.8rem;'></div>", unsafe_allow_html=True)
+            st.divider()
+            st.markdown(
+                "<div style='font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem;'>"
+                "The Vibe Check</div>",
+                unsafe_allow_html=True,
+            )
+
+            from src.script_expander import VIBE_CATEGORIES
+
+            for cat_name, endpoints in VIBE_CATEGORIES.items():
+                vibe_score = vibes.get(cat_name, 50)
+                vibe_score = max(0, min(100, vibe_score))
+                label = _get_vibe_label(vibe_score, endpoints)
+
+                st.markdown(
+                    f"<div style='font-size: 0.8rem; margin-bottom: 0.1rem;'>"
+                    f"{cat_name}</div>",
+                    unsafe_allow_html=True,
+                )
+                st.progress(vibe_score / 100)
+                st.markdown(
+                    f"<div style='font-size: 0.7rem; color: #666; margin-top: -0.5rem; "
+                    f"margin-bottom: 0.5rem; font-style: italic;'>{label}</div>",
+                    unsafe_allow_html=True,
+                )
+
+    # Footer disclaimer
     if st.session_state.score is not None:
-        score = st.session_state.score
-        vibes = st.session_state.vibes or {}
-
-        import random
-        random.seed(int(score * 100))
-        audience_offset = random.randint(-12, 15)
-        audience_score = max(0, min(100, score + audience_offset))
-
-        tom_icon = "🍅" if score >= 60 else "🤢"
-        tom_label = "Fresh" if score >= 60 else "Rotten"
-        pop_icon = "🍿" if audience_score >= 60 else "👎"
-        pop_label = "Hot" if audience_score >= 60 else "Meh"
-
-        st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
-        st.divider()
-
-        # Score cards side by side
-        col1, col_space, col2 = st.columns([1, 0.3, 1])
-
-        with col1:
-            st.markdown(
-                f"<div style='text-align: center; padding: 1rem 0;'>"
-                f"<div style='font-size: 2.2rem;'>{tom_icon}</div>"
-                f"<div style='font-size: 2.5rem; font-weight: bold; margin: 0.2rem 0;'>{score:.0f}%</div>"
-                f"<div style='font-size: 0.85rem; font-weight: 600;'>Tomatometer</div>"
-                f"<div style='font-size: 0.75rem; color: #888; margin-top: 0.15rem;'>{tom_label}</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
-        with col2:
-            st.markdown(
-                f"<div style='text-align: center; padding: 1rem 0;'>"
-                f"<div style='font-size: 2.2rem;'>{pop_icon}</div>"
-                f"<div style='font-size: 2.5rem; font-weight: bold; margin: 0.2rem 0;'>{audience_score:.0f}%</div>"
-                f"<div style='font-size: 0.85rem; font-weight: 600;'>Popcornmeter</div>"
-                f"<div style='font-size: 0.75rem; color: #888; margin-top: 0.15rem;'>{pop_label}</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
-        # Vibe Check section
-        st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
-        st.divider()
-        st.markdown("##### The Vibe Check")
-        st.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
-
-        from src.script_expander import VIBE_CATEGORIES
-
-        for cat_name, endpoints in VIBE_CATEGORIES.items():
-            vibe_score = vibes.get(cat_name, 50)
-            vibe_score = max(0, min(100, vibe_score))
-
-            # Label with low/high descriptor
-            if vibe_score <= 25:
-                descriptor = f" — *{endpoints['low']}*"
-            elif vibe_score >= 75:
-                descriptor = f" — *{endpoints['high']}*"
-            else:
-                descriptor = ""
-
-            st.markdown(
-                f"<div style='font-size: 0.85rem; margin-bottom: 0.15rem;'>"
-                f"{cat_name}{descriptor}</div>",
-                unsafe_allow_html=True,
-            )
-            st.progress(vibe_score / 100)
-            st.markdown("<div style='margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True)
-
         st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
         st.caption(
             "Scores are for entertainment only. Tomatometer is predicted by a model "
