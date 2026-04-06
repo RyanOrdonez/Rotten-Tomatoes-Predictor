@@ -2,11 +2,28 @@
 
 **Describe a movie idea and get a predicted Rotten Tomatoes score, audience rating, and emotional vibe breakdown — powered by AI.**
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://rotten-tomatoes-score-predictor.streamlit.app/)
+![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Streamlit](https://img.shields.io/badge/built%20with-Streamlit-FF4B4B.svg)
+![scikit-learn](https://img.shields.io/badge/ML-scikit--learn-F7931E.svg)
+
 ---
 
-## [>>> Try It Now — Launch the App <<<](https://rotten-tomatoes-score-predictor.streamlit.app/)
+## Table of Contents
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://rotten-tomatoes-score-predictor.streamlit.app/)
+- [Try It Now](#try-it-now)
+- [How It Works](#how-it-works)
+- [The Vibe Check](#the-vibe-check)
+- [About the Model](#about-the-model)
+- [Self-Hosting](#self-hosting)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+
+---
+
+## Try It Now
+
+### [>>> Launch the App <<<](https://rotten-tomatoes-score-predictor.streamlit.app/)
 
 **No install required.** Click the link, type a movie idea, and get your results. Each user gets **3 free predictions per day**.
 
