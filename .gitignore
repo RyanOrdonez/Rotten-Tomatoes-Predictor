@@ -1,7 +1,26 @@
+# Environment
 .env
+.env.local
+.venv/
+venv/
+env/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.venv/
-venv/
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit
 .streamlit/secrets.toml
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
