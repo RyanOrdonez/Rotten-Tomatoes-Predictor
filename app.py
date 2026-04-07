@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="RT Score Predictor",
@@ -236,6 +237,14 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.markdown(
+        "<div style='text-align: center; font-size: 0.78rem; opacity: 0.8; "
+        "margin-bottom: 0.25rem;'>"
+        "<a href='https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor' "
+        "target='_blank' style='text-decoration: none; color: inherit;'>"
+        "⭐ Star on GitHub</a></div>",
+        unsafe_allow_html=True,
+    )
     st.caption("Built by Ryan Ordonez")
 
 # ---------------------------------------------------------------------------
@@ -500,3 +509,47 @@ if st.session_state.synopsis:
             "Scores are for entertainment only. Tomatometer is predicted by a model "
             "trained on 739 real screenplays. Vibes are rated by AI."
         )
+
+# ---------------------------------------------------------------------------
+# Page footer — GitHub star call-to-action (always visible)
+# ---------------------------------------------------------------------------
+st.markdown("<div style='margin-top: 2.5rem;'></div>", unsafe_allow_html=True)
+st.divider()
+_f1, _f2, _f3 = st.columns([1, 2, 1])
+with _f2:
+    st.markdown(
+        "<div style='text-align: center; font-size: 0.95rem; "
+        "margin-bottom: 0.5rem; color: #444;'>"
+        "Like this project? Show some love on GitHub ⭐</div>",
+        unsafe_allow_html=True,
+    )
+    components.html(
+        """
+        <div style="display: flex; justify-content: center; align-items: center; gap: 12px;">
+          <a class="github-button"
+             href="https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor"
+             data-color-scheme="no-preference: light; light: light; dark: dark;"
+             data-icon="octicon-star"
+             data-size="large"
+             data-show-count="true"
+             aria-label="Star RyanOrdonez/Rotten-Tomatoes-Predictor on GitHub">Star</a>
+          <a class="github-button"
+             href="https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor/fork"
+             data-color-scheme="no-preference: light; light: light; dark: dark;"
+             data-icon="octicon-repo-forked"
+             data-size="large"
+             data-show-count="true"
+             aria-label="Fork RyanOrdonez/Rotten-Tomatoes-Predictor on GitHub">Fork</a>
+        </div>
+        <script async defer src="https://buttons.github.io/buttons.js"></script>
+        """,
+        height=45,
+    )
+    st.markdown(
+        "<div style='text-align: center; font-size: 0.78rem; "
+        "color: #888; margin-top: 0.4rem;'>"
+        "<a href='https://github.com/RyanOrdonez/Rotten-Tomatoes-Predictor' "
+        "target='_blank' style='color: #888; text-decoration: none;'>"
+        "View source on GitHub →</a></div>",
+        unsafe_allow_html=True,
+    )
